@@ -1,74 +1,82 @@
-const Admin = require('../models/Admin');
+const pool = require("../models/db");
 
-// GET: Fetch all admins
-const getAdmins = async (req, res) => {
+// Get all orders
+exports.getAllOrders = async (req, res) => {
   try {
-    const admins = await Admin.find({}, '-password'); // Exclude passwords for security
-    res.status(200).json(admins);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    const result = await pool.query("SELECT * FROM orders ORDER BY id DESC");
+    res.status(200).json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };
 
-// POST: Create a new admin
-const createAdmin = async (req, res) => {
-  const { username, password } = req.body;
+// Update order status
+exports.updateOrderStatus = async (req, res) => {
+  const { orderId } = req.params;
+  const { status } = req.body;
+
+  if (!["Pending", "In Progress", "Delivered"].includes(status)) {
+    return res.status(400).json({ error: "Invalid status value" });
+  }
 
   try {
-    const existingAdmin = await Admin.findOne({ username });
-    if (existingAdmin) {
-      return res.status(400).json({ message: 'Admin with this username already exists' });
-    }
-
-    const newAdmin = new Admin({ username, password });
-    await newAdmin.save();
-    res.status(201).json({ message: 'Admin created successfully', admin: { username: newAdmin.username } });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    await pool.query("UPDATE orders SET status = $1 WHERE id = $2", [
+      status,
+      orderId,
+    ]);
+    res.status(200).json({ message: "Order status updated successfully!" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };
 
-// PUT: Update an existing admin
-const updateAdmin = async (req, res) => {
-  const { id } = req.params;
-  const { username, password } = req.body;
+// Add a new product
+exports.addProduct = async (req, res) => {
+  const { name, price } = req.body;
+
+  if (!name || !price || isNaN(price)) {
+    return res.status(400).json({ error: "Invalid product data" });
+  }
 
   try {
-    const admin = await Admin.findById(id);
-    if (!admin) {
-      return res.status(404).json({ message: 'Admin not found' });
-    }
-
-    if (username) admin.username = username;
-    if (password) admin.password = password; // Will be hashed due to pre-save hook
-
-    await admin.save();
-    res.status(200).json({ message: 'Admin updated successfully', admin: { username: admin.username } });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    await pool.query("INSERT INTO products (name, price) VALUES ($1, $2)", [
+      name,
+      price,
+    ]);
+    res.status(201).json({ message: "Product added successfully!" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };
 
-// DELETE: Remove an admin
-const deleteAdmin = async (req, res) => {
-  const { id } = req.params;
+// Edit a product
+exports.editProduct = async (req, res) => {
+  const { productId } = req.params;
+  const { name, price } = req.body;
+
+  if (!name || !price || isNaN(price)) {
+    return res.status(400).json({ error: "Invalid product data" });
+  }
 
   try {
-    const admin = await Admin.findById(id);
-    if (!admin) {
-      return res.status(404).json({ message: 'Admin not found' });
-    }
-
-    await admin.remove();
-    res.status(200).json({ message: 'Admin deleted successfully' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    await pool.query(
+      "UPDATE products SET name = $1, price = $2 WHERE id = $3",
+      [name, price, productId]
+    );
+    res.status(200).json({ message: "Product updated successfully!" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };
 
-module.exports = {
-  getAdmins,
-  createAdmin,
-  updateAdmin,
-  deleteAdmin,
+// Delete a product
+exports.deleteProduct = async (req, res) => {
+  const { productId } = req.params;
+
+  try {
+    await pool.query("DELETE FROM products WHERE id = $1", [productId]);
+    res.status(200).json({ message: "Product deleted successfully!" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 };
